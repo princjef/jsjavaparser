@@ -14,6 +14,8 @@
 //  is preserved, and any changes are properly documented.
 //
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -23,6 +25,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
@@ -50,21 +54,63 @@ public class App {
 		if (args.length == 0 || cmd.hasOption("h")) {
 			new HelpFormatter().printHelp(App.class.getSimpleName() + "[OPTION]... [FILE]...", options);
 		} else {
-			for (final String file : cmd.getArgs()) {
-				ast(file, cmd);
+			String inputFile = cmd.getArgs()[0];
+			String outputDirectory = cmd.getArgs()[1];
+			File file = new File(inputFile);
+			if (file.isDirectory()) {
+				for (File sourceFile : App.getDirectorySourceFiles(file)) {
+					ast(
+						sourceFile.getPath(),
+						Paths.get(outputDirectory, Paths.get(inputFile).relativize(sourceFile.toPath()).toString()).toString(),
+						cmd
+					);
+				}
+			} else if (file.isFile()) {
+				ast(
+					inputFile,
+					Paths.get(outputDirectory, Paths.get(inputFile).getFileName().toString()).toString(),
+					cmd
+				);
 			}
 		}
 	}
 
-	private static void ast(final String file, final CommandLine cmd) throws IOException {
+	/**
+	* Recursively finds and returns all source files in a directory
+	*
+	* @param directory The directory to search
+	* @return The set of source files found in the directory
+	*/
+	protected static Set<File> getDirectorySourceFiles(File directory) {
+		Set<File> sourceFiles = new HashSet<File>();
+
+		if (directory.isDirectory() && directory.canRead()) {
+			File[] files = directory.listFiles();
+
+			if (files != null) {
+				for(File file : files) {
+					if (file.isDirectory()) {
+						sourceFiles.addAll(getDirectorySourceFiles(file));
+					} else {
+						if (file.getName().endsWith(".java")) {
+							sourceFiles.add(file);
+						}
+					}
+				}
+			}
+		}
+
+		return sourceFiles;
+	}
+
+	private static void ast(final String file, final String outputFile, final CommandLine cmd) throws IOException {
 		@SuppressWarnings("deprecation")
-		final ASTParser parser = ASTParser.newParser(AST.JLS4); // JLS4 (aka
-																// JLS7)
+		final ASTParser parser = ASTParser.newParser(AST.JLS8);
 		final String src = readFile(file, StandardCharsets.UTF_8);
 		parser.setSource(src.toCharArray());
 		parser.setKind(ASTParser.K_COMPILATION_UNIT);
 		final Map<?, ?> options = JavaCore.getOptions();
-		JavaCore.setComplianceOptions(JavaCore.VERSION_1_7, options);
+		JavaCore.setComplianceOptions(JavaCore.VERSION_1_8, options);
 		parser.setCompilerOptions(options);
 		final CompilationUnit cu = (CompilationUnit) parser.createAST(null);
 		for (IProblem problem : cu.getProblems()) {
@@ -103,14 +149,18 @@ public class App {
 			}
 		});
 
+		// Create the file to connect to
+		File output = new File(outputFile.replaceFirst("\\.java$", ".json"));
+		output.getParentFile().mkdirs();
+		output.createNewFile();
+		FileOutputStream outputStream = new FileOutputStream(output, false);
+
 		if (cmd.hasOption("c")) {
-			try (final UglyMathCommentsExtractor cex = new UglyMathCommentsExtractor(cu, src)) {
-				final ASTDumper dumper = new ASTDumper(cex);
-				dumper.dump(cu);
-				System.out.flush();
-			}
+			final ASTDumper dumper = new ASTDumper(new JSONStyleASTPrinter(outputStream), null);
+			dumper.dump(cu);
+			System.out.flush();
 		} else {
-			final ASTDumper dumper = new ASTDumper();
+			final ASTDumper dumper = new ASTDumper(new JSONStyleASTPrinter(outputStream), null);
 			for (final Object comment : cu.getCommentList()) {
 				((Comment) comment).delete();
 			}

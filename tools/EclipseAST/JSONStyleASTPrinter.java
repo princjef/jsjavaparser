@@ -1,7 +1,7 @@
 
 //===========================================================================
 //
-//  This program use Eclipse JDT to parse java source files 
+//  This program use Eclipse JDT to parse java source files
 //  and dumps resulting AST in JSON representation.
 //
 //---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ public class JSONStyleASTPrinter extends Indenter implements IASTPrinter {
 			hasItemsStack.push(true);
 		}
 
-		printer.println(getIndentString() + name + ": " + (isList ? "[" : "{"));
+		printer.println(getIndentString() + "\"" + name + "\": " + (isList ? "[" : "{"));
 		indent();
 		hasItemsStack.push(false);
 	}
@@ -79,7 +79,7 @@ public class JSONStyleASTPrinter extends Indenter implements IASTPrinter {
 			indent();
 		}
 
-		printer.print(getIndentString() + "node: \"" + name + "\"");
+		printer.print(getIndentString() + "\"node\": \"" + name + "\"");
 	}
 
 	public void endType(String name, boolean parentIsList) {
@@ -105,7 +105,7 @@ public class JSONStyleASTPrinter extends Indenter implements IASTPrinter {
 			hasItemsStack.push(true);
 		}
 
-		printer.print(getIndentString() + name + ": " + (value == null || isJsonAllowedType(value.getClass()) ? value
+		printer.print(getIndentString() + "\"" + name + "\": " + (value == null || isJsonAllowedType(value.getClass()) ? value
 				: "\"" + StringEscapeUtils.escapeJson(value.toString()) + "\""));
 	}
 
